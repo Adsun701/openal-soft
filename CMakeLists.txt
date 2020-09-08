@@ -417,10 +417,12 @@ endif()
 
 # Some systems need libm for some math functions to work
 set(MATH_LIB )
-check_library_exists(m pow "" HAVE_LIBM)
-if(HAVE_LIBM)
-    set(MATH_LIB ${MATH_LIB} m)
-    set(CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} m)
+if(NOT MINGW)
+    check_library_exists(m pow "" HAVE_LIBM)
+    if(HAVE_LIBM)
+        set(MATH_LIB ${MATH_LIB} m)
+        set(CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} m)
+    endif()
 endif()
 
 # Some systems need to link with -lrt for clock_gettime as used by the common
@@ -870,16 +872,22 @@ option(ALSOFT_REQUIRE_WASAPI "Require WASAPI backend" OFF)
 if(WIN32)
     set(WINSDK_LIB_DIRS )
     set(WINSDK_INCLUDE_DIRS )
-    find_package(WindowsSDK)
-    if(WINDOWSSDK_FOUND)
-        get_windowssdk_library_dirs(${WINDOWSSDK_PREFERRED_DIR} WINSDK_LIB_DIRS)
-        get_windowssdk_include_dirs(${WINDOWSSDK_PREFERRED_DIR} WINSDK_INCLUDE_DIRS)
+    if(MSVC)
+        find_package(WindowsSDK)
+        if(WINDOWSSDK_FOUND)
+            get_windowssdk_library_dirs(${WINDOWSSDK_PREFERRED_DIR} WINSDK_LIB_DIRS)
+            get_windowssdk_include_dirs(${WINDOWSSDK_PREFERRED_DIR} WINSDK_INCLUDE_DIRS)
+        endif()
     endif()
 
     # Check MMSystem backend
     check_include_files("windows.h;mmsystem.h" HAVE_MMSYSTEM_H)
-    find_library(WINMM_LIBRARY NAMES winmm
-        PATHS ${WINSDK_LIB_DIRS})
+    if(MSVC)
+        find_library(WINMM_LIBRARY NAMES winmm
+            PATHS ${WINSDK_LIB_DIRS})
+    else()
+        set(WINMM_LIBRARY winmm)
+    endif()
     if(HAVE_MMSYSTEM_H AND WINMM_LIBRARY)
         option(ALSOFT_BACKEND_WINMM "Enable Windows Multimedia backend" ON)
         if(ALSOFT_BACKEND_WINMM)
@@ -1143,7 +1151,7 @@ if(ALSOFT_EXAMPLES)
     endif()
 endif()
 
-if(NOT WIN32)
+if(NOT MSVC)
     set(LIBNAME "openal")
 else()
     set(LIBNAME "OpenAL32")
@@ -1245,7 +1253,14 @@ else()
     add_library(${IMPL_TARGET} SHARED ${OPENAL_OBJS} ${ALC_OBJS} ${RC_CONFIG}
         ${TARGET_PUBLIC_HEADERS})
     if(WIN32)
-        set_target_properties(${IMPL_TARGET} PROPERTIES PREFIX "")
+        if(MSVC)
+            set_target_properties(${IMPL_TARGET} PROPERTIES PREFIX "")
+        else()
+            SET_TARGET_PROPERTIES(OpenAL PROPERTIES
+                                  OUTPUT_NAME openal
+                                  RUNTIME_OUTPUT_NAME openal-${LIB_MAJOR_VERSION}
+                                  ARCHIVE_OUTPUT_NAME openal)
+        endif()
     endif()
     target_link_libraries(${IMPL_TARGET} PRIVATE common ${LINKER_FLAGS} ${EXTRA_LIBS} ${MATH_LIB})
 
